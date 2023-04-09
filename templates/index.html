@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coding Interview Assistant</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.6.0/styles/github.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.6.0/highlight.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>Coding Interview Assistant</h1>
+        <!-- Add a new div around the dropdown and buttons -->
+        <div class="controls">
+            <div class="dropdown-wrapper">
+                <select id="language_selector">
+                    <option value="">Select a programming language</option>
+                    <option value="C">C</option>
+                    <option value="C#">C#</option>
+                    <option value="C++">C++</option>
+                    <option value="Java">Java</option>
+                    <option value="Python">Python</option>
+                </select>
+            </div>
+            <div class="buttons-wrapper">
+                <button id="start_button" onclick="startListening()" disabled>Start Listening</button>
+                <button id="stop_button" onclick="stopListening()" disabled>Stop Listening</button>
+            </div>
+        </div>
+        <h2>Transcript:</h2>
+        <div id="final_output" class="output"></div>
+        <h2>ChatGPT Response:</h2>
+        <div id="markdown_output" class="output"></div>
+    </div>
+
+    <div id="progress_indicator" class="progress-indicator hidden"></div>
+
+    <script>
+        // Set marked options
+        marked.setOptions({
+            breaks: true
+        });
+
+        const languageSelector = document.getElementById('language_selector');
+        const startButton = document.getElementById('start_button');
+        const stopButton = document.getElementById('stop_button');
+        const finalOutput = document.getElementById('final_output');
+
+        languageSelector.addEventListener('change', function() {
+            if (this.value) {
+                startButton.disabled = false;
+                this.disabled = true;
+            } else {
+                startButton.disabled = true;
+            }
+        });
+
+        const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition || window.mozSpeechRecognition || window.msSpeechRecognition)();
+        recognition.lang = 'en-US';
+        recognition.interimResults = true;
+        recognition.maxAlternatives = 1;
+        recognition.continuous = true;
+
+        recognition.onstart = function () {
+            startButton.disabled = true;
+            stopButton.disabled = false;
+        };
+
+        let finalTranscript = '';
+
+        recognition.onresult = function (event) {
+            let interimTranscript = '';
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+                const transcript = event.results[i][0].transcript;
+                if (event.results[i].isFinal) {
+                    finalTranscript += transcript + '\n';
+                    finalOutput.innerHTML += transcript + '<br>';
+                } else {
+                    interimTranscript += transcript;
+                }
+            }
+        };
+
+        function startListening() {
+            finalTranscript = '';
+            finalOutput.innerHTML = '';
+            recognition.start();
+        }
+
+        function stopListening() {
+            recognition.stop();
+            const language = languageSelector.value;
+            sendTranscript(finalTranscript, language);
+        }
+
+        async function sendTranscript(transcript, language) {
+            startButton.disabled = true;
+            stopButton.disabled = true;
+            console.log("Sending transcript:", transcript);
+            console.log("Selected language:", language);
+
+            const progressIndicator = document.getElementById('progress_indicator');
+            progressIndicator.classList.remove('hidden');
+
+            try {
+                const response = await fetch('/handle_transcript', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({language: language, transcript: transcript})
+                });
+
+                if (response.ok) {
+                    console.log('Transcript sent successfully');
+                    const data = await response.json();
+                    console.log("Received data from server:", data);
+                    const markdownOutput = document.getElementById('markdown_output');
+                    markdownOutput.innerHTML = marked.parse(data.result);
+                    hljs.highlightAll();
+                } else {
+                    console.error('Error sending transcript:', response.status);
+                }
+            } catch (error) {
+                console.error('Error sending transcript:', error);
+            } finally {
+                progressIndicator.classList.add('hidden');
+                languageSelector.disabled = false;
+                startButton.disabled = false;
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', (event) => {
+            document.querySelectorAll('pre code').forEach((block) => {
+                hljs.highlightElement(block);
+            });
+        });
+    </script>
+</body>
+</html>

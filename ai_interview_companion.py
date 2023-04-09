@@ -23,7 +23,3 @@ def generate_solution(language: str, transcript: str) -> str:
     result = chain.run(programming_language=language, text=transcript)
     print(result)
     return result
-
-
-if __name__ == '__main__':
-    generate_solution("Can you write a recursive function to reverse a string?", "python")
